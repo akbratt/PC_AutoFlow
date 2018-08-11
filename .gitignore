@@ -9,6 +9,7 @@
 *.pyc
 *.pth
 *.swp
+*.swo
 
 
 # Packages #
