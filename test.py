@@ -5,55 +5,66 @@ import preprocess
 import utils
 import models
 import re
-import pandas as pd
+import argparse
+import os
 
-in_z = 0
-cuda = False
 
-test_volpath ='/home/alex/samsung_512/CMR_PC/external_data_nathan_definitive/test'
-test_segpath = test_volpath
-out_file = '/home/alex/samsung_512/CMR_PC/external_data_nathan_definitive/fakes'
-double_vol = False
-model = models.Net23(2)
-if cuda:
-    model.cuda()
+parser = argparse.ArgumentParser(description='Automated segmentation for'+\
+        'PC-CMR -- testing')
+parser.add_argument('--datapath', type=str, default='.',
+                    help='path to image data')
+parser.add_argument('--cuda', type=bool, default=True,
+                    help='whether to use cuda')
+parser.add_argument('--batch_size', type=int, default=5,
+                    help='batch size')
+args = parser.parse_args()
 
-model.load_state_dict(torch.load(\
-        '/home/alex/samsung_512/CMR_PC/external_data_nathan_definitive/checkpoint.pth'))
+def main():
+    in_z = 0
 
-batch_size = 5
-t_batch_size = 1
-pad = transforms.Pad(2)
-sqr = transforms.Square()
-center = transforms.CenterCrop2(224)
-crop = transforms.RandomCrop(256)
-scale = transforms.Scale(256)
-orig_dim = 256
-transform_plan = [sqr, scale, center]
-num_labels=2
-num_labels_final = 2
-series_names = ['Mag']
-seg_series_names = ['AV']
+    test_volpath = os.path.join(args.datapath, 'test')
+    out_file = os.path.join(args.datapath, 'fakes')
+    checkpoint_path = os.path.join(args.datapath, 'checkpoint.pth')
+    test_segpath = test_volpath
+    double_vol = False
+    model = models.Net23(2)
+    cuda = args.cuda
+    if cuda:
+        model.cuda()
 
-f = preprocess.gen_filepaths(test_segpath)
+    model.load_state_dict(torch.load(checkpoint_path))
 
-mult_inds = []
-for i in f:
-    if 'volume' in i:
-        mult_inds.append(int(re.findall('\d+', i)[0]))
+    batch_size = args.batch_size
+    orig_dim = 256
+    sqr = transforms.Square()
+    center = transforms.CenterCrop2(224)
+    scale = transforms.Scale(orig_dim)
+    transform_plan = [sqr, scale, center]
+    num_labels=2
+    series_names = ['Mag']
+    seg_series_names = ['AV']
 
-mult_inds = sorted(mult_inds)
+    f = preprocess.gen_filepaths(test_segpath)
 
-mult_inds = np.unique(mult_inds)
+    mult_inds = []
+    for i in f:
+        if 'volume' in i:
+            mult_inds.append(int(re.findall('\d+', i)[0]))
 
-volpaths, segpaths = utils.get_paths(mult_inds, f, series_names, \
-        seg_series_names, test_volpath, test_segpath)
+    mult_inds = sorted(mult_inds)
 
-t_transform_plan = transform_plan
+    mult_inds = np.unique(mult_inds)
+    mult_inds = mult_inds[0:5]
 
-out = utils.test_net_cheap(test_volpath, test_segpath, mult_inds, in_z, model,\
-        t_transform_plan, orig_dim, batch_size, out_file, num_labels,\
-        num_labels_final, volpaths, segpaths, nrrd=True,\
-        vol_only=double_vol, get_dice=True, make_niis=False, cuda=cuda)
-out.to_csv('/home/alex/samsung_512/CMR_PC/external_data_nathan_definitive/out.csv',\
-        index=False)
+    volpaths, segpaths = utils.get_paths(mult_inds, f, series_names, \
+            seg_series_names, test_volpath, test_segpath)
+
+    out = utils.test_net_cheap(mult_inds, in_z, model,\
+            transform_plan, orig_dim, batch_size, out_file, num_labels,\
+            volpaths, segpaths, nrrd=True, vol_only=double_vol,\
+            get_dice=True, make_niis=False, cuda=cuda)
+    out_csv = os.path.join(args.datapath, 'out.csv')
+    out.to_csv(out_csv, index=False)
+
+if __name__ == '__main__':
+    main()

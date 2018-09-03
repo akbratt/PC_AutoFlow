@@ -122,6 +122,7 @@ def get_batch(volpath, segpath, batch_size, in_z, out_z, center_crop_sz,\
         txforms=None, workers=1, nrrd=True):
 
     pool = mp.Pool(processes=workers)
+    print(segpath)
     f = gen_filepaths(segpath)
 
     inds = []

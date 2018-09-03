@@ -34,7 +34,6 @@ def get_out_size(orig_dim, in_z, transform_plan, net, cuda=True):
 
     dummy = np.stack([dummy, dummy])
     dummy = np.expand_dims(dummy, axis=1)
-    # print(dummy.shape)
     dummy = Variable(torch.from_numpy(dummy).float())
     if cuda:
         dummy = dummy.cuda()
@@ -168,10 +167,10 @@ def get_subvols_cheap(series, seg_series, slice_inds, in_z, out_z, \
 
     return bigout, bigvol, bigseg
 
-def test_net_cheap(test_volpath, test_segpath, mult_inds, in_z, model,\
+def test_net_cheap(mult_inds, in_z, model,\
         t_transform_plan, orig_dim, batch_size, out_file, num_labels,\
-        num_labels_final, volpaths, segpaths,\
-        nrrd=True, vol_only=False, get_dice=False, make_niis=False,\
+        volpaths, segpaths, nrrd=True, vol_only=False,\
+        get_dice=False, make_niis=False,\
         verbose=True, cuda=True):
 
     t_out_z, t_center_crop_sz = get_out_size(orig_dim, in_z,\
@@ -215,10 +214,10 @@ def test_net_cheap(test_volpath, test_segpath, mult_inds, in_z, model,\
         if get_dice:
             hd, assd = get_dists_non_volumetric(tseg.astype(np.int64),\
                     np.argmax(tout, axis=0))
-            tseg_hot = get_hot(tseg, num_labels_final)
+            tseg_hot = get_hot(tseg, num_labels)
             tout_hot = np.argmax(tout,axis=0)
             tout_hot = np.clip(tout_hot, 0,1)
-            tout_hot = get_hot(tout_hot, num_labels_final)
+            tout_hot = get_hot(tout_hot, num_labels)
             dce = dice(tseg_hot[1:],tout_hot[1:])
             jc = jaccard(tseg_hot[1:], tout_hot[1:])
 
@@ -256,6 +255,7 @@ def test_net_cheap(test_volpath, test_segpath, mult_inds, in_z, model,\
             nib.save(vol_out, \
                     out_file + '/tvol-{}.nii'.format(\
                     mult_inds[ind]))
+
     if get_dice:
         columns = ['id','time','dice','jaccard','hd','assd']
         out = pd.DataFrame(np.stack([np.array(dice_inds),\
@@ -279,8 +279,6 @@ def get_dists_volumetric(real, fake):
 
         f_coords = np.argwhere(f_border == 1).copy(order='C').astype(np.float64)
         r_coords = np.argwhere(r_border == 1).copy(order='C').astype(np.float64)
-        # print(r_coords.shape)
-        # print(f_coords.shape)
 
         try:
             euclid_distances = pair.euclidean_distances(f_coords, r_coords)
@@ -404,9 +402,6 @@ def write_nrrd(seg, out_file):
     keyvaluepairs['Segmentation_ReferenceImageExtentOffset'] = ' '.join(options['space origin'])
 
     options['keyvaluepairs'] = keyvaluepairs
-#    if sparse.shape[0] == 1:
-#        sparse = np.pad(sparse, pad_width=((0,1),(0,0),(0,0),(0,0)),mode='constant')
-#        print(sparse.shape)
     nrrd.write(out_file, sparse, options = options)
 
 def get_paths(inds, f, series_names, seg_series_names, volpath, segpath):
