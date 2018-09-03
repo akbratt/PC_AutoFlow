@@ -224,7 +224,6 @@ class Rotate(object):
 
             return vol, seg
 
-
 class Flip(object):
 
     def __init__(self):
@@ -277,7 +276,6 @@ class Pad(object):
 
         return np.array(newvol), np.array(newseg)
 
-
 class PadEntireVol(object):
 
     def __init__(self, width):
@@ -319,10 +317,3 @@ class Noise(object):
             newvol.append(v)
 
         return np.array(newvol), np.array(seg)
-
-        # if in_z > 0:
-            # vol = [self.engage_helper(v, m) for v in vol]
-        # else:
-            # vol = self.engage_helper(vol, m)
-
-        # return np.array(vol), np.array(seg)

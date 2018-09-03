@@ -10,8 +10,6 @@ import matplotlib.pyplot as plt
 import utils
 import models
 import sys
-import densenet
-import densenet2
 import re
 # from torch.nn import init
 
@@ -20,9 +18,13 @@ fold = '0'
 tag = 'res'
 # volpath = '/home/alex/LiverSegmentation/5mm_train_3'
 # segpath = '/home/alex/LiverSegmentation/5mm_train_3'
-volpath = '/home/alex/samsung_512/CMR_PC/folds/fold_' + fold + '/train'
-segpath = '/home/alex/samsung_512/CMR_PC/folds/fold_' + fold + '/train'
-progress_file = '/home/alex/samsung_512/CMR_PC/folds/fold_' + fold +\
+# volpath = '/home/alex/samsung_512/CMR_PC/folds/fold_' + fold + '/train'
+# segpath = '/home/alex/samsung_512/CMR_PC/folds/fold_' + fold + '/train'
+# progress_file = '/home/alex/samsung_512/CMR_PC/folds/fold_' + fold +\
+        # '/' + tag + '.csv'
+volpath = '/home/alex/samsung_512/CMR_PC/external_data_nathan_definitive/train'
+segpath = volpath
+progress_file ='/home/alex/samsung_512/CMR_PC/external_data_nathan_definitive'+\
         '/' + tag + '.csv'
 
 
@@ -68,45 +70,17 @@ volpaths, segpaths = utils.get_paths(mult_inds, f, series_names, \
 #add depth padding
 if tag == 'res':
     model = models.Net23(2)
-elif tag == 'dense_pre':
-    model = densenet2.densenet121(True)
-elif tag == 'dense_nopre':
-    model = densenet2.densenet121(False)
-elif tag == 'dense_test':
-    model = densenet.densenet_small()
-else:
-    raise ValueError('Invalid tag')
 
-# model = densenet.densenet121()
 model.cuda()
-# model.load_state_dict(torch.load(\
-        # '/home/alex/samsung_512/CMR_PC/folds/fold_0/dense_pre2.pth'))
-# model.load_state_dict(torch.load(\
-        # '/home/alex/samsung_512/CMR_PC/checkpoint_dense.pth'))
-
 optimizer = optim.RMSprop(model.parameters(), lr=lr)
-# optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-# optimizer = optim.Adam(model.parameters(), lr=lr)
 
 out_z, center_crop_sz = utils.get_out_size(orig_dim, in_z,\
         transform_plan, model)
 center = transforms.CenterCrop(center_crop_sz)
 depth_center = transforms.DepthCenterCrop(out_z)
 
-# t_transform_plan = []
-# t_transform_plan = transform_plan
-# t_out_z, t_center_crop_sz = utils.get_out_size(orig_dim, in_z,\
-        # t_transform_plan, model)
-# t_center = transforms.CenterCrop(t_center_crop_sz)
-# t_depth_center = transforms.DepthCenterCrop(t_out_z)
-
 t0 = time.time()
 
-# weight = torch.FloatTensor(preprocess.get_weights(volpath, segpath,
-    # 8, clip_val=1, nrrd=False)).cuda()
-
-# print(weight)
-# print('generating weights took {:.2f} seconds'.format(time.time()-t0))
 counter = 0
 print_interval = 490
 model.train()
@@ -145,12 +119,12 @@ for i in range(200000000000000000000000000000000):
         # if np.random.rand() < 0.2:
             # optimizer = optim.RMSprop(model.parameters(), lr=lr)
 
-        counter = 0
-        dce, jc, hd, assd = utils.test_net_cheap('', '',\
-                mult_inds, in_z, model,\
-                t_transform_plan, orig_dim, 5, '', 2,\
-                2, volpaths, segpaths, nrrd=True,\
-                vol_only=False, get_dice=True, verbose=False)
+        # counter = 0
+        # dce, jc, hd, assd = utils.test_net_cheap('', '',\
+                # mult_inds, in_z, model,\
+                # t_transform_plan, orig_dim, 5, '', 2,\
+                # 2, volpaths, segpaths, nrrd=True,\
+                # vol_only=False, get_dice=True, verbose=False)
 
         seg_hot = utils.get_hot(seg.data.cpu().numpy(), out.size()[-3])
         seg_hot = np.transpose(seg_hot, axes=[1,0,2,3])
@@ -187,28 +161,26 @@ for i in range(200000000000000000000000000000000):
         test.set_title('test fake')
         fig.tight_layout()
         plt.imshow(masked_fake)
-        plt.savefig('/home/alex/samsung_512/CMR_PC/folds/fold_' + fold +\
+        plt.savefig('/home/alex/samsung_512/CMR_PC/external_data_nathan_definitive'+\
                 '/out.png', dpi=200)
         plt.clf()
 
-        progress.append([i*batch_size, np.mean(dce), np.mean(jc), np.mean(hd),\
-                np.mean(assd)])
-        prg = np.array(progress)
-        np.savetxt(progress_file, np.array(prg))
-        plt.plot(prg[:,0], prg[:,1])
-        plt.tight_layout()
-        plt.savefig('/home/alex/samsung_512/CMR_PC/folds/fold_' + fold +\
-                '/' + tag + '_plt.png')
-        plt.clf()
+        # progress.append([i*batch_size, np.mean(dce), np.mean(jc), np.mean(hd),\
+                # np.mean(assd)])
+        # prg = np.array(progress)
+        # np.savetxt(progress_file, np.array(prg))
+        # plt.plot(prg[:,0], prg[:,1])
+        # plt.tight_layout()
+        # plt.savefig('/home/alex/samsung_512/CMR_PC/external_data_nathan_definitive'+\
+                # '/' + tag + '_plt.png')
+        # plt.clf()
 
-        print(('\rStep {} completed in {:.2f} sec ; Loss = {:.2f}' +\
-                '; Dice = {:.3f} ; JC = {:.2f} ; HD = {:.2f} ; ASSD = {:.2f}')\
-                .format(i*batch_size,time.time()-t0, loss.data.cpu()[0],\
-                np.mean(dce),np.mean(jc),np.mean(hd),np.mean(assd)))
-        if np.mean(dce) > 0.93:
-            torch.save(model.state_dict(),\
-                    '/home/alex/samsung_512/CMR_PC/folds/fold_' + fold +\
-                    '/' + tag + '_' + '{:.3f}'.format(np.mean(dce)) + 'testing.pth')
+        print(('\rStep {} completed in {:.2f} sec ; Loss = {:.2f}')\
+                .format(i*batch_size,time.time()-t0, loss.data.cpu()[0]))
+        torch.save(model.state_dict(),\
+                '/home/alex/samsung_512/CMR_PC/external_data_nathan_definitive'+\
+                '/checkpoint.pth')
+        counter = 0
 
         t0 = time.time()
         # print(weight)

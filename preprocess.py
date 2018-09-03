@@ -6,12 +6,8 @@ import transforms
 import torch
 import re
 import nrrd
-import time
-import matplotlib.pyplot as plt
 
-path = "/home/alex/LiverSegmentation/img/"
-
-# Rotates and flips images becaus the .nii volumes load flipped and rotated
+# Rotates and flips images because .nii volumes load flipped and rotated
 def rot_and_flip(img):
     img = np.rot90(img, axes=(-2, -1))
     img = np.flip(img, -1)
@@ -22,20 +18,6 @@ def rot_and_flip(img):
 # Turns a list of lists of volumes into a list of volumes
 def unpack(vols):
     return [item for sublist in vols for item in sublist]
-
-def get_nii_nii(volpath,segpath):
-    vol = nib.as_closest_canonical(nib.load(volpath))
-    vol = vol.get_data().astype(np.int16)
-    seg = nib.as_closest_canonical(nib.load(segpath))
-    seg = seg.get_data().astype(np.int16)
-
-    return vol, seg
-
-def get_nii(volpath):
-    vol = nib.as_closest_canonical(nib.load(volpath))
-    vol = vol.get_data().astype(np.int16)
-
-    return vol
 
 def get_nii_nrrd(nii_paths, nrrd_paths):
     vols = []
@@ -53,7 +35,6 @@ def get_nii_nrrd(nii_paths, nrrd_paths):
         for i in range(d.shape[0]):
             d[i] = np.where(d[i]==0,d[i],i+1)
         d = np.max(d,0)
-        # d[np.where(d==3)] = 2
         directions = ok['space directions']
         directions = [[float(a) for a in b] for b in directions[1:]]
         wonky = False
@@ -76,27 +57,18 @@ def get_nii_nrrd(nii_paths, nrrd_paths):
         segs.append(seg)
     return vols, segs
 
-# Opens volumess and segmentations and returns random slices according to the
+# Opens volumes and segmentations and returns random slices according to the
 # parameters
 def open_nii(volpaths, segpaths, ind, num, in_z, out_z, center_crop_sz,\
         series_names, seg_series_names, txforms=None,nrrd=True):
     vols = []
     segs = []
-    # volpath = os.path.join(volpaths, 'volume-' + str(ind) + '.nii')
     if nrrd:
-        # segpath = os.path.join(segpath, 'segmentation-' + str(ind) + '.seg.nrrd')
         series, seg_series = get_nii_nrrd(volpaths, segpaths)
-    # else:
-        # segpath = os.path.join(segpath, 'segmentation-' + str(ind) + '.nii')
-        # vol, seg = get_nii_nii(volpaths, segpaths)
     assert np.shape(series)[3] == np.shape(seg_series)[3]
     num_slices = np.arange(np.shape(series[0])[2])
     if in_z != 0:
         num_slices = num_slices[in_z:-in_z]
-    if(num_slices.size <= 2 and in_z != 0):
-        print(ind)
-        print(num_slices)
-        print(num)
     sub_rand = np.random.choice(num_slices, size=num, replace=False)
 
     center = transforms.CenterCrop(center_crop_sz)
@@ -136,19 +108,6 @@ def open_nii(volpaths, segpaths, ind, num, in_z, out_z, center_crop_sz,\
                     out_z > 1)))
 
     return vols, segs
-
-def make_segs(segs):
-    not_liver = np.zeros_like(segs)
-    liver = np.zeros_like(segs)
-    lesion = np.zeros_like(segs)
-
-    not_liver[np.where(segs==0)] = 1
-    liver[np.where(segs==1)] = 1
-    lesion[np.where(segs==2)] = 1
-
-    segs = np.stack([not_liver, liver, lesion])
-    segs = np.transpose(segs, [1, 0, 2, 3])
-    return segs
 
 def gen_filepaths(path):
     f = []
@@ -229,56 +188,5 @@ def get_batch(volpath, segpath, batch_size, in_z, out_z, center_crop_sz,\
     vols = vols-torch.min(vols)
     vols = vols/torch.max(vols)
     segs = torch.from_numpy(np.round(rot_and_flip(segs)))
-    # return vols.unsqueeze(1), segs.long(), vol_inds
     return vols, segs.long(), vol_inds
 
-def get_segs(volpath, segpath, ind, nrrd=True):
-    volpath = os.path.join(volpath, 'volume-' + str(ind) + '.nii')
-    if nrrd:
-        segpath = os.path.join(segpath, 'segmentation-' + str(ind) + '.seg.nrrd')
-        _, seg = get_nii_nrrd(volpath, segpath)
-    else:
-        segpath = os.path.join(segpath, 'segmentation-' + str(ind) + '.nii')
-        _, seg = get_nii_nii(volpath, segpath)
-
-    counts = np.bincount(seg.flatten())
-    if counts.shape[0] == 2:
-        counts = np.insert(counts,counts.size,0)
-    return counts
-
-def get_weights(volpath, segpath, workers, clip_val=1, nrrd=True):
-
-    pool = mp.Pool(processes=workers)
-    f = gen_filepaths(segpath)
-
-    inds = []
-    for i in f:
-        if 'segmentation' in i:
-            inds.append(int(re.findall('\d+', i)[0]))
-
-    inds = np.array(inds)
-
-    args = list(zip([volpath]*len(inds), [segpath]*len(inds),\
-        inds, [nrrd]*len(inds)))
-
-    out = pool.starmap(get_segs, args)
-    pool.close()
-
-    counts = sum(out)
-    counts_collapsed = np.zeros(clip_val+1)
-    i = 0
-    while i < clip_val:
-        counts_collapsed[i] = counts[i]
-        i += 1
-    counts_collapsed[clip_val] = np.sum(counts[clip_val:])
-    counts = counts_collapsed
-    s = sum(counts)
-    counts = [a/s for a in counts]
-    A = np.diagflat(counts)
-    B = np.ones((len(counts), 1))
-    B = B/sum(B)
-    Ai = np.linalg.inv(A)
-    p = np.dot(Ai, B)
-    p = [a/sum(p) for a in p]
-    w = np.stack(p)
-    return w
